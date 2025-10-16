@@ -4,6 +4,8 @@ on:
     branches: [ "main" ]
     paths:
       - "site/**"
+      - "terraform/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch: {} # manual trigger
 
 jobs:
@@ -27,26 +29,34 @@ jobs:
           terraform_version: 1.7.5
 
 
-      - name: Get outputs (bucket, dist ID)
-        id: tf
-        working-directory: terraform
+            # REMOVE the old "Setup Terraform" + "Get outputs" steps
+
+      - name: Resolve bucket & distribution without Terraform
+        id: res
         run: |
-          terraform init -input=false -reconfigure
-          BUCKET=$(terraform output -raw bucket_name || true)
-          DISTID=$(terraform output -raw cloudfront_distribution_id || true)
-          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
-          echo "distid=$DISTID" >> $GITHUB_OUTPUT
+          PROJECT_NAME="wa-static-site"     # must match var.project_name
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="${PROJECT_NAME}-site-${ACCOUNT}"
+
+          # Find the CloudFront distribution by the comment we set in Terraform
+          DISTID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='${PROJECT_NAME} distribution'].Id | [0]" \
+            --output text)
+
+          echo "bucket=$BUCKET"   >> $GITHUB_OUTPUT
+          echo "distid=$DISTID"   >> $GITHUB_OUTPUT
+
 
       - name: Sync site to S3
         run: |
-          aws s3 sync site "s3://${{ steps.tf.outputs.bucket }}/" \
-            --delete --only-show-errors
+          aws s3 sync site "s3://${{ steps.res.outputs.bucket }}/" --delete --only-show-errors
 
-      - name: Create CloudFront invalidation
-        if: ${{ steps.tf.outputs.distid != '' }}
+      - name: Invalidate CloudFront cache
+        if: ${{ steps.res.outputs.distid != '' && steps.res.outputs.distid != 'None' }}
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "${{ steps.tf.outputs.distid }}" \
+            --distribution-id "${{ steps.res.outputs.distid }}" \
             --paths "/*"
+
 
       
