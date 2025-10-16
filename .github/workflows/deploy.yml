@@ -4,6 +4,7 @@ on:
     branches: [ "main" ]
     paths:
       - "site/**"
+  workflow_dispatch: {} # manual trigger
 
 jobs:
   deploy:
@@ -47,3 +48,5 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.tf.outputs.distid }}" \
             --paths "/*"
+
+      
