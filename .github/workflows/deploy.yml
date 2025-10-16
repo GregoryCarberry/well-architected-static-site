@@ -1,0 +1,43 @@
+name: deploy
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "site/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get outputs (bucket, dist ID)
+        id: tf
+        working-directory: terraform
+        run: |
+          terraform init -input=false -reconfigure
+          BUCKET=$(terraform output -raw bucket_name || true)
+          DISTID=$(terraform output -raw cloudfront_distribution_id || true)
+          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "distid=$DISTID" >> $GITHUB_OUTPUT
+
+      - name: Sync site to S3
+        run: |
+          aws s3 sync site "s3://${{ steps.tf.outputs.bucket }}/" \
+            --delete --only-show-errors
+
+      - name: Create CloudFront invalidation
+        if: ${{ steps.tf.outputs.distid != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.tf.outputs.distid }}" \
+            --paths "/*"
