@@ -33,9 +33,11 @@ well-architected-static-site/
 
 ---
 
-## Architecture Diagram
+## 🧭 Architecture Diagram
 
-![Architecture Diagram](./architecture_diagram_static_site.md)
+For a full interactive version, see [architecture_diagram_static_site.md](./architecture_diagram_static_site.md).
+
+![AWS Well-Architected Static Site Architecture](./docs/architecture.png)
 
 ---
 
