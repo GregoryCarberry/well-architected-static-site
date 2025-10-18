@@ -246,6 +246,14 @@ data "aws_iam_policy_document" "gh_actions_permissions" {
     actions = ["cloudfront:CreateInvalidation"]
     resources = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.this.id}"]
   }
+
+    statement {
+    sid     = "CloudFrontList"
+    effect  = "Allow"
+    actions = ["cloudfront:ListDistributions"]
+    resources = ["*"]
+  }
+
 }
 
 resource "aws_iam_role" "gh_actions_deploy" {
