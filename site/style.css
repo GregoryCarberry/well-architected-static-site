@@ -99,3 +99,15 @@ body{
   margin:30px 0 8px; color:var(--muted); font-size:.9rem; text-align:center;
   opacity:.9;
 }
+
+.card .actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding-top: 10px;
+}
+.card .actions .button {
+  font-size: 0.9rem;
+  padding: 8px 14px;
+}
