@@ -32,6 +32,75 @@ resource "aws_s3_bucket_public_access_block" "site" {
   restrict_public_buckets = true
 }
 
+# ---------- Logging bucket ----------
+resource "aws_s3_bucket" "logs" {
+  bucket = "${var.project_name}-logs-${data.aws_caller_identity.current.account_id}"
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket                  = aws_s3_bucket.logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# CloudFront standard logs require ACL grants (can’t use bucket-owner-enforced)
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "logs" {
+  bucket     = aws_s3_bucket.logs.id
+  acl        = "log-delivery-write" # grants WRITE/READ_ACP to the CloudFront log delivery group
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
+}
+
+# Keep logs ~90 days
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    id     = "expire-logs-90d"
+    status = "Enabled"
+    expiration {
+      days = 90
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket_logging" "site_logs" {
+  bucket        = aws_s3_bucket.site.id
+  target_bucket = aws_s3_bucket.logs.id
+  target_prefix = "s3-site/"
+}
+
+
+
 # -----------------------------
 # CloudFront OAC
 # -----------------------------
@@ -161,6 +230,13 @@ resource "aws_cloudfront_distribution" "this" {
   comment             = "${var.project_name} distribution"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
+
+  logging_config {
+    bucket          = aws_s3_bucket.logs.bucket_domain_name # e.g. my-logs-bucket.s3.amazonaws.com
+    prefix          = "cloudfront/"
+    include_cookies = false
+  }
+
 
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
