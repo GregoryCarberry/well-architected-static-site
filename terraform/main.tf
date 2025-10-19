@@ -108,6 +108,50 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
+# CloudFront Response Headers Policy (security)
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name    = "${var.project_name}-security-headers"
+  comment = "HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy"
+
+  security_headers_config {
+    content_security_policy {
+      override                = true
+      content_security_policy = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    }
+
+    strict_transport_security {
+      override                   = true
+      include_subdomains         = true
+      preload                    = true
+      access_control_max_age_sec = 63072000
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      override     = true
+      frame_option = "DENY"
+    }
+
+    referrer_policy {
+      override        = true
+      referrer_policy = "no-referrer"
+    }
+  }
+
+  # Add Permissions-Policy via custom header
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=(), fullscreen=(self)"
+      override = true
+    }
+  }
+}
+
+
 # -----------------------------
 # CloudFront Distribution
 # -----------------------------
@@ -119,17 +163,18 @@ resource "aws_cloudfront_distribution" "this" {
   price_class         = "PriceClass_100"
 
   origin {
-    domain_name = aws_s3_bucket.site.bucket_regional_domain_name
-    origin_id   = "s3-${aws_s3_bucket.site.id}"
+    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
+    origin_id                = "s3-${aws_s3_bucket.site.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
   }
 
   default_cache_behavior {
-    target_origin_id       = "s3-${aws_s3_bucket.site.id}"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
+    target_origin_id           = "s3-${aws_s3_bucket.site.id}"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
     forwarded_values {
       query_string = false
@@ -137,15 +182,26 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
+  # ---------- THESE MUST BE AT THE RESOURCE LEVEL ----------
+  aliases = var.enable_custom_domain ? [
+    var.domain_name,
+    "www.${var.domain_name}"
+  ] : []
+
+  viewer_certificate {
+    # Use ACM cert when custom domain is enabled; otherwise default CF cert
+    acm_certificate_arn            = var.enable_custom_domain ? aws_acm_certificate.cf[0].arn : null
+    ssl_support_method             = var.enable_custom_domain ? "sni-only" : null
+    minimum_protocol_version       = var.enable_custom_domain ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = var.enable_custom_domain ? false : true
+  }
+
   restrictions {
     geo_restriction { restriction_type = "none" }
   }
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
   web_acl_id = var.enable_waf ? aws_wafv2_web_acl.this[0].arn : null
+
 }
 
 # -----------------------------
@@ -153,9 +209,9 @@ resource "aws_cloudfront_distribution" "this" {
 # -----------------------------
 data "aws_iam_policy_document" "site_policy" {
   statement {
-    sid     = "AllowCloudFrontServiceGetObject"
-    effect  = "Allow"
-    actions = ["s3:GetObject"]
+    sid       = "AllowCloudFrontServiceGetObject"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.site.arn}/*"]
 
     principals {
@@ -216,8 +272,8 @@ data "aws_iam_policy_document" "gh_actions_assume_role" {
 # Permissions for deploy: sync to S3 + CF invalidation + read TF state (if you later use remote state)
 data "aws_iam_policy_document" "gh_actions_permissions" {
   statement {
-    sid     = "S3Sync"
-    effect  = "Allow"
+    sid    = "S3Sync"
+    effect = "Allow"
     actions = [
       "s3:ListBucket",
       "s3:GetBucketLocation"
@@ -226,8 +282,8 @@ data "aws_iam_policy_document" "gh_actions_permissions" {
   }
 
   statement {
-    sid     = "S3Objects"
-    effect  = "Allow"
+    sid    = "S3Objects"
+    effect = "Allow"
     actions = [
       "s3:PutObject",
       "s3:PutObjectAcl",
@@ -241,16 +297,16 @@ data "aws_iam_policy_document" "gh_actions_permissions" {
   }
 
   statement {
-    sid     = "CloudFrontInvalidate"
-    effect  = "Allow"
-    actions = ["cloudfront:CreateInvalidation"]
+    sid       = "CloudFrontInvalidate"
+    effect    = "Allow"
+    actions   = ["cloudfront:CreateInvalidation"]
     resources = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.this.id}"]
   }
 
-    statement {
-    sid     = "CloudFrontList"
-    effect  = "Allow"
-    actions = ["cloudfront:ListDistributions"]
+  statement {
+    sid       = "CloudFrontList"
+    effect    = "Allow"
+    actions   = ["cloudfront:ListDistributions"]
     resources = ["*"]
   }
 
@@ -269,4 +325,101 @@ resource "aws_iam_policy" "gh_actions_policy" {
 resource "aws_iam_role_policy_attachment" "gh_actions_attach" {
   role       = aws_iam_role.gh_actions_deploy.name
   policy_arn = aws_iam_policy.gh_actions_policy.arn
+}
+
+# -----------------------------
+# ACM (DNS validation) in us-east-1 for CloudFront
+# -----------------------------
+data "aws_route53_zone" "this" {
+  count        = var.enable_custom_domain ? 1 : 0
+  name         = var.domain_name
+  private_zone = false
+}
+
+resource "aws_acm_certificate" "cf" {
+  provider          = aws.us_east_1
+  count             = var.enable_custom_domain ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  subject_alternative_names = [
+    "www.${var.domain_name}"
+  ]
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Create DNS validation records for each domain/SAN
+resource "aws_route53_record" "cert_validation" {
+  for_each = var.enable_custom_domain ? {
+    for dvo in aws_acm_certificate.cf[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  } : {}
+
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.record]
+}
+
+
+resource "aws_acm_certificate_validation" "cf" {
+  provider                = aws.us_east_1
+  count                   = var.enable_custom_domain ? 1 : 0
+  certificate_arn         = aws_acm_certificate.cf[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+}
+
+# Root (apex) A/AAAA
+resource "aws_route53_record" "root_a" {
+  count   = var.enable_custom_domain ? 1 : 0
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "root_aaaa" {
+  count   = var.enable_custom_domain ? 1 : 0
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# WWW A/AAAA
+resource "aws_route53_record" "www_a" {
+  count   = var.enable_custom_domain ? 1 : 0
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "www_aaaa" {
+  count   = var.enable_custom_domain ? 1 : 0
+  zone_id = data.aws_route53_zone.this[0].zone_id
+  name    = "www.${var.domain_name}"
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    evaluate_target_health = false
+  }
 }

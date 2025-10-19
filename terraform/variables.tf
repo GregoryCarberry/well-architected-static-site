@@ -12,8 +12,8 @@ variable "region" {
 
 # Minimal WAF switch (leave true; can be toggled off if needed)
 variable "enable_waf" {
-  type        = bool
-  default     = true
+  type    = bool
+  default = true
 }
 
 variable "github_owner" {
@@ -30,4 +30,15 @@ variable "github_branch" {
   description = "Branch that can deploy (e.g., main)"
   type        = string
   default     = "main"
+}
+
+variable "enable_custom_domain" {
+  description = "Enable ACM + custom domain wiring"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Root domain (e.g., example.com) that lives in Route 53"
+  type        = string
 }
