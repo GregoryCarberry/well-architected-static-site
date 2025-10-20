@@ -1,21 +1,23 @@
 # ☁️ Well-Architected Static Site (AWS + Terraform)
 
-A fully automated, secure, and cost-efficient static website deployment built on AWS.
-This project demonstrates how to apply **AWS Well-Architected Framework** principles using **Terraform** and **GitHub Actions CI/CD**.
+A **fully automated, secure, and cost-efficient static website** deployment built on AWS.
+
+This project demonstrates the **AWS Well-Architected Framework** across all five pillars, using **Terraform** and **GitHub Actions CI/CD** to manage a modern static site pipeline.
 
 ---
 
 ## 🧩 Overview
 
-**Goal:** Host a production-grade static site with modern DevOps best practices.
+**Goal:** Build and operate a production-grade static site following AWS best practices for architecture, security, and operations — deployable via a single `terraform apply`.
 
-**Architecture:**
-
-* **S3 (private)** — hosts static files
-* **CloudFront (OAC)** — secure content delivery
-* **AWS WAF** — adds managed security protection
-* **GitHub Actions** — handles CI/CD (build, deploy, invalidate cache)
-* **Terraform IaC** — defines all infrastructure as code
+**Core services:**
+- **Amazon S3 (private)** – static file hosting (origin only)
+- **Amazon CloudFront (OAC)** – global CDN and TLS termination
+- **AWS WAFv2** – managed web security at the edge
+- **AWS Route 53** – DNS hosting and certificate validation
+- **AWS Certificate Manager (us-east-1)** – SSL certificate for CloudFront
+- **GitHub Actions (OIDC)** – continuous deployment via short-lived credentials
+- **Terraform (IaC)** – declarative infrastructure provisioning
 
 ---
 
@@ -23,19 +25,34 @@ This project demonstrates how to apply **AWS Well-Architected Framework** princi
 
 ```
 well-architected-static-site/
-├── terraform/               # Terraform IaC for AWS resources
-├── site/                    # Static website files (index.html, assets)
-├── .github/workflows/       # GitHub Actions CI/CD workflows
-├── CLEANUP_CHECKLIST.md     # Steps to safely tear down resources
-├── REDEPLOY_CHECKLIST.md    # Steps to rebuild the project
-└── README.md                # (this file)
+├── site/
+│   ├── index.html                # Landing page
+│   ├── 404.html                  # Custom error page
+│   └── assets/                   # CSS, JS, and images (cached separately)
+│
+├── terraform/
+│   ├── main.tf                   # CloudFront, S3, WAF, Route 53, IAM, etc.
+│   ├── variables.tf              # Input variables
+│   ├── outputs.tf                # Exported values (IDs, ARNs, endpoints)
+│   └── backend.tf                # Remote state + DynamoDB locking
+│
+├── .github/workflows/
+│   └── deploy.yml                # CI/CD pipeline (build → sync → invalidate)
+│
+├── docs/
+│   ├── architecture.png          # Architecture diagram (CloudFront-S3-WAF-CI/CD)
+│   ├── CLEANUP_CHECKLIST.md      # Verified teardown steps
+│   ├── REDEPLOY_CHECKLIST.md     # Re-provisioning and redeployment steps
+│   └── DAILY_TERRAFORM_CYCLE.md  # Terraform steps for cleanup / redeploy
+|
+└── README.md                     # (this file)
 ```
 
 ---
 
 ## 🧭 Architecture Diagram
 
-For a full interactive version, see [architecture_diagram_static_site.md](./architecture_diagram_static_site.md).
+For details, see [architecture_diagram_static_site.md](./docs/architecture_diagram_static_site.md).
 
 ![AWS Well-Architected Static Site Architecture](./docs/architecture.png)
 
@@ -43,56 +60,100 @@ For a full interactive version, see [architecture_diagram_static_site.md](./arch
 
 ## 🚀 Key Features
 
-* **Private S3 bucket** with Origin Access Control (OAC)
-* **CloudFront CDN** distribution for global delivery
-* **AWS WAFv2** with managed rules for security
-* **Terraform-managed IAM roles** for GitHub OIDC deploys
-* **GitHub Actions CI/CD** automating site sync and cache invalidation
-* **Versioned infrastructure** using Terraform modules and remote backend (optional)
+### 🔐 Security
+- **CloudFront OAC** for private S3 origin access (no public buckets)
+- **Strict HTTPS enforcement** (`redirect-to-https`)
+- **Response Headers Policy**: CSP, HSTS, X-Frame-Options, Referrer-Policy, etc.
+- **AWS WAFv2** with managed rule groups (SQLi/XSS/Common Rule Set)
+- **IAM least-privilege role** for GitHub OIDC deployments
+- **Server-side encryption (AES-256)** on all S3 buckets
+
+### ⚙️ Reliability
+- **Infrastructure-as-Code** (Terraform)
+- **State locking** via DynamoDB
+- **Versioned S3 buckets**
+- **Custom 404 and graceful 403→404 mapping**
+- **www → apex redirect** using a CloudFront Function
+
+### ⚡ Performance Efficiency
+- **Separate cache policies**:
+  - HTML → `CachingDisabled`
+  - `/assets/*` → `CachingOptimized`
+- **Brotli/Gzip compression** enabled
+- **Edge network limited to PriceClass_100** (EU + N. America)
+- **Fast invalidation** from CI/CD
+
+### 💰 Cost Optimisation
+- Serverless architecture (S3 + CloudFront)
+- Logging bucket with lifecycle expiry
+- Regional resource placement (eu-west-2)
+- Automated teardown via `CLEANUP_CHECKLIST.md`
+
+### 🧠 Operational Excellence
+- **GitHub Actions CI/CD** pipeline:
+  1. Assumes AWS role via OIDC
+  2. Syncs `/site` to S3
+  3. Invalidates CloudFront cache
+- **Terraform validation & formatting** in CI
+- Ready for **Athena + Glue** log analytics (planned)
+- Full rebuild capability via `REDEPLOY_CHECKLIST.md`
 
 ---
 
 ## 🔧 Setup Summary
 
-1. Configure AWS CLI (`aws configure`).
-2. Run Terraform from `/terraform` to provision infrastructure.
-3. Add repo secrets:
-
-   * `AWS_ROLE_ARN`
-   * `AWS_REGION`
+1. Configure AWS CLI:
+   ```bash
+   aws configure
+   ```
+2. Deploy infrastructure:
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply
+   ```
+3. Add GitHub secrets:
+   - `AWS_ROLE_ARN`
+   - `AWS_REGION`
 4. Push updates to `/site` → GitHub Actions auto-syncs and invalidates CloudFront.
+
+---
+
+## 📊 Well-Architected Pillar Mapping
+
+| Pillar | Implementation Highlights |
+|--------|----------------------------|
+| **Security** | OAC, HTTPS, WAFv2, IAM least privilege, encryption, CSP |
+| **Reliability** | IaC, versioning, error handling, remote state, DNS validation |
+| **Performance Efficiency** | Cache policies, compression, edge selection |
+| **Cost Optimisation** | PriceClass, lifecycle rules, serverless hosting |
+| **Operational Excellence** | CI/CD, Terraform validation, logging, observability plan |
 
 ---
 
 ## 🧹 Maintenance
 
-* Use **CLEANUP_CHECKLIST.md** when pausing or decommissioning.
-* Use **REDEPLOY_CHECKLIST.md** when returning to rebuild the project.
-
-Both guides include tested commands and safe cleanup procedures for versioned S3 buckets and CloudFront resources.
-
----
-
-## 🧠 Learning Focus
-
-This project reinforces:
-
-* **Security:** Private access patterns via OAC, IAM least privilege.
-* **Reliability:** Infrastructure-as-Code reproducibility.
-* **Performance:** Global CDN caching.
-* **Operational Excellence:** Automated CI/CD pipelines.
-* **Cost Optimization:** Serverless, pay-as-you-go hosting.
+Use:
+- **CLEANUP_CHECKLIST.md** – safe teardown of versioned buckets, OAC, CloudFront.
+- **REDEPLOY_CHECKLIST.md** – quick rebuild guide after cleanup.
 
 ---
 
-### ✅ Status
+## 🧩 Next Steps
 
-Currently in maintenance-ready state — all infrastructure can be rebuilt using Terraform or safely destroyed with cleanup scripts.
-
-**Author:** Gregory John Carberry
-**LinkedIn:** [linkedin.com/in/gregory-carberry](https://www.linkedin.com/in/gregory-carberry/)
-**GitHub:** [github.com/GregoryCarberry](https://github.com/GregoryCarberry)
+- Wait for **ACM certificate validation** to complete (us-east-1 outage recovery).
+- Add **CloudFront Security Headers Policy** as a managed resource.
+- Integrate **Athena/Glue** for log analytics dashboards.
+- Add **robots.txt** and **sitemap.xml** for SEO readiness.
+- Document outputs (`distribution_id`, `site_domain`) for portfolio linkage.
 
 ---
 
-**Last verified:** *$(date +"%Y-%m-%d")*
+## 👤 Author
+
+**Gregory John Carberry**  
+[LinkedIn](https://www.linkedin.com/in/gregory-carberry) • [GitHub](https://github.com/GregoryCarberry)
+
+---
+
+**Last verified:** *2025-10-20*
