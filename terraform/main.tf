@@ -280,11 +280,11 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   default_cache_behavior {
-    target_origin_id           = "s3-${aws_s3_bucket.site.id}"
-    viewer_protocol_policy     = "redirect-to-https"
-    allowed_methods            = ["GET", "HEAD"]
-    cached_methods             = ["GET", "HEAD"]
-    compress                   = true
+    target_origin_id       = "s3-${aws_s3_bucket.site.id}"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
 
     # HTML should not be cached aggressively (use managed no-cache policy)
     cache_policy_id = data.aws_cloudfront_cache_policy.caching_disabled.id
@@ -301,12 +301,12 @@ resource "aws_cloudfront_distribution" "this" {
 
   # Long-lived assets under /assets/*
   ordered_cache_behavior {
-    path_pattern     = "/assets/*"
-    target_origin_id = "s3-${aws_s3_bucket.site.id}"
+    path_pattern           = "/assets/*"
+    target_origin_id       = "s3-${aws_s3_bucket.site.id}"
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
-    allowed_methods       = ["GET", "HEAD"]
-    cached_methods        = ["GET", "HEAD"]
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
 
     # Aggressive caching for static assets
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
@@ -344,9 +344,9 @@ resource "aws_cloudfront_distribution" "this" {
 
   viewer_certificate {
     cloudfront_default_certificate = !var.enable_custom_domain
-    acm_certificate_arn           = var.enable_custom_domain ? aws_acm_certificate_validation.cf[0].certificate_arn : null
-    ssl_support_method           = var.enable_custom_domain ? "sni-only" : null
-    minimum_protocol_version     = var.enable_custom_domain ? "TLSv1.2_2021" : null
+    acm_certificate_arn            = var.enable_custom_domain ? aws_acm_certificate_validation.cf[0].certificate_arn : null
+    ssl_support_method             = var.enable_custom_domain ? "sni-only" : null
+    minimum_protocol_version       = var.enable_custom_domain ? "TLSv1.2_2021" : null
   }
 }
 
@@ -490,26 +490,27 @@ resource "aws_acm_certificate" "cf" {
   subject_alternative_names = [
     "www.${var.domain_name}"
   ]
+
   lifecycle {
     create_before_destroy = true
   }
 }
 
-# Create DNS validation records for each domain/SAN
-resource "aws_route53_record" "cert_validation" {
-  for_each = var.enable_custom_domain ? {
+# Create a record for each domain validation option (apex + www)
+resource "aws_route53_record" "acm_validation" {
+  for_each = {
     for dvo in aws_acm_certificate.cf[0].domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      type   = dvo.resource_record_type
-      record = dvo.resource_record_value
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
     }
-  } : {}
+  }
 
   zone_id = data.aws_route53_zone.this[0].zone_id
   name    = each.value.name
   type    = each.value.type
   ttl     = 60
-  records = [each.value.record]
+  records = [each.value.value]
 }
 
 
@@ -517,7 +518,11 @@ resource "aws_acm_certificate_validation" "cf" {
   provider                = aws.us_east_1
   count                   = var.enable_custom_domain ? 1 : 0
   certificate_arn         = aws_acm_certificate.cf[0].arn
-  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+  validation_record_fqdns = [for r in aws_route53_record.acm_validation : r.fqdn]
+
+  timeouts {
+    create = "45m"
+  }
 }
 
 # Root (apex) A/AAAA
