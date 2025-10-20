@@ -177,6 +177,41 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
+# --- Managed cache policy lookups (HTML no-cache; assets optimized) ---
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+# --- CloudFront Function: www -> apex redirect ---
+resource "aws_cloudfront_function" "www_to_root" {
+  name    = "${var.project_name}-www-to-root"
+  runtime = "cloudfront-js-1.0"
+  comment = "Redirect www.* to apex"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var req = event.request;
+      var host = req.headers.host && req.headers.host.value || "";
+      if (host.startsWith("www.")) {
+        var toHost = host.substring(4);
+        return {
+          statusCode: 301,
+          statusDescription: "Moved Permanently",
+          headers: {
+            "location": { "value": "https://" + toHost + req.uri }
+          }
+        };
+      }
+      return req;
+    }
+  EOF
+}
+
+
 # CloudFront Response Headers Policy (security)
 resource "aws_cloudfront_response_headers_policy" "security" {
   name    = "${var.project_name}-security-headers"
@@ -250,12 +285,47 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods            = ["GET", "HEAD"]
     cached_methods             = ["GET", "HEAD"]
     compress                   = true
+
+    # HTML should not be cached aggressively (use managed no-cache policy)
+    cache_policy_id = data.aws_cloudfront_cache_policy.caching_disabled.id
+
+    # Attach the response headers policy we created earlier
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
-    forwarded_values {
-      query_string = false
-      cookies { forward = "none" }
+    # CloudFront Function for www -> apex redirect
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.www_to_root.arn
     }
+  }
+
+  # Long-lived assets under /assets/*
+  ordered_cache_behavior {
+    path_pattern     = "/assets/*"
+    target_origin_id = "s3-${aws_s3_bucket.site.id}"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+    allowed_methods       = ["GET", "HEAD"]
+    cached_methods        = ["GET", "HEAD"]
+
+    # Aggressive caching for static assets
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Friendly error mapping (S3 private site often returns 403 for missing keys)
+  custom_error_response {
+    error_code            = 403
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 0
   }
 
   # ---------- THESE MUST BE AT THE RESOURCE LEVEL ----------
@@ -264,20 +334,20 @@ resource "aws_cloudfront_distribution" "this" {
     "www.${var.domain_name}"
   ] : []
 
-  viewer_certificate {
-    # Use ACM cert when custom domain is enabled; otherwise default CF cert
-    acm_certificate_arn            = var.enable_custom_domain ? aws_acm_certificate.cf[0].arn : null
-    ssl_support_method             = var.enable_custom_domain ? "sni-only" : null
-    minimum_protocol_version       = var.enable_custom_domain ? "TLSv1.2_2021" : null
-    cloudfront_default_certificate = var.enable_custom_domain ? false : true
-  }
-
-  restrictions {
-    geo_restriction { restriction_type = "none" }
-  }
-
   web_acl_id = var.enable_waf ? aws_wafv2_web_acl.this[0].arn : null
 
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = !var.enable_custom_domain
+    acm_certificate_arn           = var.enable_custom_domain ? aws_acm_certificate_validation.cf[0].certificate_arn : null
+    ssl_support_method           = var.enable_custom_domain ? "sni-only" : null
+    minimum_protocol_version     = var.enable_custom_domain ? "TLSv1.2_2021" : null
+  }
 }
 
 # -----------------------------
