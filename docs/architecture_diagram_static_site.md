@@ -12,12 +12,12 @@ graph TD
         CFDistribution[CloudFront Distribution — HTTPS + Compression]
         WAF[WAFv2 Managed Rules]
         OAC[Origin Access Control]
-        ACM[ACM Certificate (us-east-1)]
+        ACM["ACM Certificate (us-east-1)"]
         Route53[Route 53 DNS Validation]
     end
 
     subgraph User[End Users]
-        Browser[Browser Request (HTTPS)]
+        Browser["Browser Request (HTTPS)"]
     end
 
     Browser -->|HTTPS Request| CFDistribution
