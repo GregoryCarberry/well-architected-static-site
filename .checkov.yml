@@ -8,7 +8,6 @@ skip-check:
   - CKV2_AWS_47   # Managed rules already cover Log4j
   - CKV2_AWS_65   # BucketOwnerPreferred is correct
   - CKV_AWS_174   # TLS >= 1.2 enforced in config
-
   - CKV_AWS_145   # KMS not required; using AES-256
   - CKV_AWS_144   # Cross-region replication not needed
   - CKV2_AWS_62   # No S3 event notifications required
