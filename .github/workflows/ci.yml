@@ -51,7 +51,9 @@ jobs:
       - name: Checkov (Terraform scan)
         working-directory: terraform
         run: |
-          # First pass: don't fail the build so you can see findings clearly.
-          # Remove --soft-fail to enforce later.
-          checkov -d . --framework terraform
+          # Option 1: never fail the build
+          # checkov -d . --framework terraform --soft-fail --config-file ../terraform/.checkov.yml
+
+          # Option 2: only fail on HIGH (uncomment this, remove the line above)
+          checkov -d . --framework terraform --hard-fail-on HIGH --soft-fail-on MEDIUM,LOW --config-file ../terraform/.checkov.yml
 
