@@ -127,6 +127,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
       days = 90
     }
 
+    abort_incomplete_multipart_upload {
+  days_after_initiation = 7
+}
+
+
     # Keep this ONLY if logs bucket has versioning enabled
     # noncurrent_version_expiration {
     #   noncurrent_days = 90
@@ -145,6 +150,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
     noncurrent_version_expiration {
       noncurrent_days = 30
     }
+
+    abort_incomplete_multipart_upload {
+  days_after_initiation = 7
+}
+
   }
 }
 
@@ -232,6 +242,12 @@ resource "aws_wafv2_web_acl" "this" {
     }
   }
 }
+
+resource "aws_wafv2_web_acl_logging_configuration" "this" {
+  log_destination_configs = [aws_s3_bucket.logs.arn]
+  resource_arn            = aws_wafv2_web_acl.this[0].arn
+}
+# -----------------------------
 
 # --- Managed cache policy lookups (HTML no-cache; assets optimized) ---
 data "aws_cloudfront_cache_policy" "caching_disabled" {
