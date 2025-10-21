@@ -52,5 +52,6 @@ jobs:
         working-directory: terraform
         run: |
           # First pass: don't fail the build so you can see findings clearly.
-          # Flip --soft-fail=false later to enforce.
-          checkov -d . --framework terraform --soft-fail=true
+          # Remove --soft-fail to enforce later.
+          checkov -d . --framework terraform --soft-fail
+
