@@ -37,7 +37,8 @@ well-architected-static-site/
 │   └── backend.tf                # Remote state + DynamoDB locking
 │
 ├── .github/workflows/
-│   └── deploy.yml                # CI/CD pipeline (build → sync → invalidate)
+│   ├── deploy.yml                # CI/CD pipeline (build → sync → invalidate)
+│   └── ci.yml                    # Terraform fmt/validate, TFLint, Checkov
 │
 ├── docs/
 │   ├── architecture.png          # Architecture diagram (CloudFront-S3-WAF-CI/CD)
@@ -85,7 +86,9 @@ For details, see [architecture_diagram_static_site.md](./docs/architecture_diagr
 
 ### 💰 Cost Optimisation
 - Serverless architecture (S3 + CloudFront)
-- Logging bucket with lifecycle expiry
+- Logging bucket with lifecycle expiry (90 days)
+- Site bucket version expiry (30 days)
+- AWS Budget alert with email notifications
 - Regional resource placement (eu-west-2)
 - Automated teardown via `CLEANUP_CHECKLIST.md`
 
@@ -94,7 +97,7 @@ For details, see [architecture_diagram_static_site.md](./docs/architecture_diagr
   1. Assumes AWS role via OIDC
   2. Syncs `/site` to S3
   3. Invalidates CloudFront cache
-- **Terraform validation & formatting** in CI
+- **Terraform fmt/validate, TFLint & Checkov** run on every push and PR
 - Ready for **Athena + Glue** log analytics (planned)
 - Full rebuild capability via `REDEPLOY_CHECKLIST.md`
 
@@ -126,8 +129,8 @@ For details, see [architecture_diagram_static_site.md](./docs/architecture_diagr
 | **Security** | OAC, HTTPS, WAFv2, IAM least privilege, encryption, CSP |
 | **Reliability** | IaC, versioning, error handling, remote state, DNS validation |
 | **Performance Efficiency** | Cache policies, compression, edge selection |
-| **Cost Optimisation** | PriceClass, lifecycle rules, serverless hosting |
-| **Operational Excellence** | CI/CD, Terraform validation, logging, observability plan |
+| **Cost Optimisation** | Budgets, lifecycle rules, PriceClass, serverless hosting |
+| **Operational Excellence** | CI/CD, Terraform validation, linting, security scans, observability plan |
 
 ---
 
@@ -141,7 +144,6 @@ Use:
 
 ## 🧩 Next Steps
 
-- Wait for **ACM certificate validation** to complete (us-east-1 outage recovery).
 - Add **CloudFront Security Headers Policy** as a managed resource.
 - Integrate **Athena/Glue** for log analytics dashboards.
 - Add **robots.txt** and **sitemap.xml** for SEO readiness.
@@ -156,4 +158,4 @@ Use:
 
 ---
 
-**Last verified:** *2025-10-20*
+**Last verified:** *2025-10-21*
