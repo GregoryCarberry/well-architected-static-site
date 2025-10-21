@@ -1,0 +1,10 @@
+skip-check:
+  # Not applicable to single-region static hosting
+  - CKV_AWS_144   # No cross-region replication required
+  - CKV_AWS_145   # Using SSE-S3 is sufficient
+  - CKV2_AWS_62   # No event notifications used
+  - CKV_AWS_374   # Geo restriction intentionally off
+  - CKV_AWS_310   # Single origin, no failover needed
+  - CKV2_AWS_47   # Managed rules already cover Log4j
+  - CKV2_AWS_65   # BucketOwnerPreferred is correct
+  - CKV_AWS_174   # TLS >= 1.2 enforced in config
