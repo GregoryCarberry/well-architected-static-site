@@ -128,8 +128,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
     }
 
     abort_incomplete_multipart_upload {
-  days_after_initiation = 7
-}
+      days_after_initiation = 7
+    }
 
 
     # Keep this ONLY if logs bucket has versioning enabled
@@ -152,8 +152,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
     }
 
     abort_incomplete_multipart_upload {
-  days_after_initiation = 7
-}
+      days_after_initiation = 7
+    }
 
   }
 }
