@@ -42,3 +42,21 @@ variable "domain_name" {
   description = "Root domain (e.g., example.com) that lives in Route 53"
   type        = string
 }
+
+variable "budget_amount" {
+  description = "Monthly budget limit for this project"
+  type        = number
+  default     = 3 # £3 or $3 depending on your account currency
+}
+
+variable "budget_currency" {
+  description = "Currency code for the budget (must match your account currency)"
+  type        = string
+  default     = "USD" # set to "GBP" if your account is billed in GBP
+}
+
+variable "budget_email" {
+  description = "Email addresses to notify for budget alerts"
+  type        = list(string)
+  default     = ["Carberry.GJ@gmail.com"] # change/add as you like
+}

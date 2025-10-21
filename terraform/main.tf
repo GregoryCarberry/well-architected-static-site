@@ -77,21 +77,77 @@ resource "aws_s3_bucket_acl" "logs" {
   depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 
-# Keep logs ~90 days
+# Limit the budget scope to services used in this static site
+locals {
+  budget_services = [
+    "Amazon CloudFront",
+    "Amazon Route 53",
+    "AWS WAF",
+    "Amazon Simple Storage Service"
+  ]
+}
+
+resource "aws_budgets_budget" "wa_monthly_cost" {
+  name         = "wa-static-site-monthly"
+  budget_type  = "COST"
+  time_unit    = "MONTHLY"
+  limit_amount = var.budget_amount
+  limit_unit   = var.budget_currency
+
+  # Forecast says we'll exceed 80% of the budget
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = var.budget_email
+  }
+
+  # Actual spend hits 100% of the budget
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = var.budget_email
+  }
+
+}
+
+# Logs bucket lifecycle (keep ~90 days)
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
   rule {
     id     = "expire-logs-90d"
     status = "Enabled"
+
+    # Whole-object expiry
     expiration {
       days = 90
     }
+
+    # Keep this ONLY if logs bucket has versioning enabled
+    # noncurrent_version_expiration {
+    #   noncurrent_days = 90
+    # }
+  }
+}
+
+# Site bucket lifecycle (expire old versions after 30 days)
+resource "aws_s3_bucket_lifecycle_configuration" "site" {
+  bucket = aws_s3_bucket.site.id
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
     noncurrent_version_expiration {
-      noncurrent_days = 90
+      noncurrent_days = 30
     }
   }
 }
+
 
 resource "aws_s3_bucket_logging" "site_logs" {
   bucket        = aws_s3_bucket.site.id
