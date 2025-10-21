@@ -78,14 +78,14 @@ resource "aws_s3_bucket_acl" "logs" {
 }
 
 # Limit the budget scope to services used in this static site
-locals {
-  budget_services = [
-    "Amazon CloudFront",
-    "Amazon Route 53",
-    "AWS WAF",
-    "Amazon Simple Storage Service"
-  ]
-}
+# locals {
+#   budget_services = [
+#     "Amazon CloudFront",
+#     "Amazon Route 53",
+#     "AWS WAF",
+#     "Amazon Simple Storage Service"
+#   ]
+# }
 
 resource "aws_budgets_budget" "wa_monthly_cost" {
   name         = "wa-static-site-monthly"

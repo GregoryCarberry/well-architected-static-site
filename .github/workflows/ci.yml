@@ -42,3 +42,15 @@ jobs:
 
       - name: TFLint run
         run: tflint
+
+      - name: Install Checkov
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install checkov
+
+      - name: Checkov (Terraform scan)
+        working-directory: terraform
+        run: |
+          # First pass: don't fail the build so you can see findings clearly.
+          # Flip --soft-fail=false later to enforce.
+          checkov -d . --framework terraform --soft-fail=true
