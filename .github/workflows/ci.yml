@@ -53,5 +53,5 @@ jobs:
         run: |
           # First pass: don't fail the build so you can see findings clearly.
           # Remove --soft-fail to enforce later.
-          checkov -d . --framework terraform --soft-fail
+          checkov -d . --framework terraform
 
