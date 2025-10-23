@@ -8,13 +8,86 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Alias used by some existing state (needed so TF can read/destroy/recreate)
+provider "aws" {
+  alias  = "eu_west_2"
+  region = "eu-west-2"
+}
+
 data "aws_caller_identity" "current" {}
+
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "wa-static-site-security-headers"
+
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+
+    xss_protection {
+      protection = true
+      mode_block = true
+      override   = true
+    }
+
+    content_security_policy {
+      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests;"
+      override                = true
+    }
+  }
+
+  # Extra hardening via custom headers
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "geolocation=(), microphone=(), camera=()"
+      override = true
+    }
+
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+
+    items {
+      header   = "Cross-Origin-Resource-Policy"
+      value    = "same-origin"
+      override = true
+    }
+
+    # Keep COEP conservative for now to avoid breaking embeds.
+    items {
+      header   = "Cross-Origin-Embedder-Policy"
+      value    = "unsafe-none"
+      override = true
+    }
+  }
+}
 
 # -----------------------------
 # S3 bucket (private, versioned)
 # -----------------------------
 resource "aws_s3_bucket" "site" {
-  bucket = "${var.project_name}-site-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${var.project_name}-site-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_versioning" "site" {
@@ -34,7 +107,8 @@ resource "aws_s3_bucket_public_access_block" "site" {
 
 # ---------- Logging bucket ----------
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.project_name}-logs-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${var.project_name}-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -243,10 +317,97 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
-resource "aws_wafv2_web_acl_logging_configuration" "this" {
-  log_destination_configs = [aws_s3_bucket.logs.arn]
-  resource_arn            = aws_wafv2_web_acl.this[0].arn
+# -----------------------------
+# WAF logging via Firehose -> S3
+# -----------------------------
+
+# IAM role assumed by Firehose to write to S3
+data "aws_iam_policy_document" "firehose_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+  }
 }
+
+resource "aws_iam_role" "firehose_waf" {
+  name               = "${var.project_name}-firehose-waf"
+  assume_role_policy = data.aws_iam_policy_document.firehose_assume.json
+}
+
+# Allow Firehose to write to your logs bucket (waf-logs/ prefix)
+data "aws_iam_policy_document" "firehose_to_s3" {
+  statement {
+    sid    = "BucketLevel"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+      "s3:ListBucketMultipartUploads"
+    ]
+    resources = [aws_s3_bucket.logs.arn]
+  }
+
+  statement {
+    sid    = "ObjectLevel"
+    effect = "Allow"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:PutObjectAcl"
+    ]
+    resources = ["${aws_s3_bucket.logs.arn}/waf-logs/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "firehose_to_s3" {
+  name   = "${var.project_name}-firehose-to-s3"
+  role   = aws_iam_role.firehose_waf.id
+  policy = data.aws_iam_policy_document.firehose_to_s3.json
+}
+
+# Firehose delivery stream in us-east-1 (same control-plane as WAF CLOUDFRONT)
+resource "aws_kinesis_firehose_delivery_stream" "waf_logs" {
+  provider    = aws.us_east_1
+  name        = "aws-waf-logs-wa-static-site"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn   = aws_iam_role.firehose_waf.arn
+    bucket_arn = aws_s3_bucket.logs.arn
+
+    # main data prefix (uses expressions)
+    prefix = "waf-logs/!{timestamp:yyyy/MM/dd/}"
+
+    # REQUIRED when 'prefix' contains expressions
+    error_output_prefix = "waf-logs-errors/!{firehose:error-output-type}/!{timestamp:yyyy/MM/dd/}"
+
+    buffering_interval = 300
+    buffering_size     = 5
+    compression_format = "GZIP"
+  }
+
+  tags = {
+    Project = var.project_name
+  }
+}
+
+# Attach WAF logging to Firehose
+resource "aws_wafv2_web_acl_logging_configuration" "this" {
+  provider = aws.us_east_1
+
+  resource_arn = aws_wafv2_web_acl.this[0].arn
+  log_destination_configs = [
+    aws_kinesis_firehose_delivery_stream.waf_logs.arn
+  ]
+
+}
+
+
 # -----------------------------
 
 # --- Managed cache policy lookups (HTML no-cache; assets optimized) ---
@@ -282,51 +443,6 @@ resource "aws_cloudfront_function" "www_to_root" {
     }
   EOF
 }
-
-
-# CloudFront Response Headers Policy (security)
-resource "aws_cloudfront_response_headers_policy" "security" {
-  name    = "${var.project_name}-security-headers"
-  comment = "HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy"
-
-  security_headers_config {
-    content_security_policy {
-      override                = true
-      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
-    }
-
-    strict_transport_security {
-      override                   = true
-      include_subdomains         = true
-      preload                    = true
-      access_control_max_age_sec = 63072000
-    }
-
-    content_type_options {
-      override = true
-    }
-
-    frame_options {
-      override     = true
-      frame_option = "DENY"
-    }
-
-    referrer_policy {
-      override        = true
-      referrer_policy = "no-referrer"
-    }
-  }
-
-  # Add Permissions-Policy via custom header
-  custom_headers_config {
-    items {
-      header   = "Permissions-Policy"
-      value    = "camera=(), microphone=(), geolocation=(), fullscreen=(self)"
-      override = true
-    }
-  }
-}
-
 
 # -----------------------------
 # CloudFront Distribution
