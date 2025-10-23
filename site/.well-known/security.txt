@@ -1,0 +1,5 @@
+Contact: mailto:Carberry.GJ@gmail.com
+Expires: 2026-12-31T23:59:00Z
+Preferred-Languages: en
+Canonical: https://gjcarberry.uk/.well-known/security.txt
+Policy: https://gjcarberry.uk/security-policy.html
