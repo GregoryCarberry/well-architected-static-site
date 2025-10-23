@@ -111,3 +111,7 @@ body{
   font-size: 0.9rem;
   padding: 8px 14px;
 }
+
+svg rect[fill="#d1d5db"] {
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));
+}
