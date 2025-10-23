@@ -15,7 +15,7 @@
   <meta property="og:url" content="https://gjcarberry.uk/" />
   <meta name="twitter:card" content="summary_large_image" />
 
-  <!-- External CSS (no inline styles to satisfy CSP) -->
+  <!-- External CSS/JS (no inline to satisfy strict CSP) -->
   <link rel="stylesheet" href="/assets/style.css" />
   <script src="/assets/app.js" defer></script>
 </head>
@@ -32,7 +32,7 @@
       <nav class="cta" aria-label="primary">
         <a class="button primary" href="https://github.com/GregoryCarberry" target="_blank" rel="noopener">GitHub</a>
         <a class="button" href="https://www.linkedin.com/in/gregory-carberry" target="_blank" rel="noopener">LinkedIn</a>
-        <a class="button" href="/docs/REDEPLOY_CHECKLIST.md">Docs</a>
+        <a class="btn" href="https://github.com/GregoryCarberry/well-architected-static-site/tree/main/docs" target="_blank" rel="noopener">Docs</a>
       </nav>
     </header>
 
@@ -42,29 +42,78 @@
         <article class="card">
           <h3>Well-Architected Static Site</h3>
           <p>S3 (private) + CloudFront (OAC), WAF, custom domain, security headers, access logging, CI/CD via GitHub Actions.</p>
-          <p class="meta">Region: eu-west-1 · CSP tightened (external CSS) · Logs: 90-day lifecycle</p>
+          <p class="meta">Region: eu-west-2 · CSP tightened (no inline) · Logs: 90-day lifecycle</p>
         </article>
         <article class="card">
           <h3>Security Headers</h3>
-          <p>HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy. All set via a CloudFront Response Headers Policy.</p>
+          <p>HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy — enforced via a CloudFront Response Headers Policy.</p>
           <p class="meta">Served at the edge</p>
         </article>
         <article class="card">
           <h3>Daily Cycle</h3>
-          <p>Cheap + reproducible: remote state in S3 with DynamoDB locking; daily destroy/apply for cost control.</p>
-          <div class="actions">
-            <a class="button primary" href="/docs/DAILY_TERRAFORM_CYCLE.md">View guide</a>
-          </div>
-
+          <p>Cheap + reproducible: remote state with DynamoDB locking; destroy/apply workflow for cost control.</p>
         </article>
       </div>
+    </section>
+
+    <!-- Six Pillars illustration -->
+    <section aria-labelledby="six-pillars" class="section">
+      <h2 id="six-pillars">Six Pillars of AWS Well-Architected</h2>
+      <p class="lead">
+        This project is built around the Well-Architected Framework: Operational Excellence, Security, Reliability,
+        Performance Efficiency, Cost Optimization, and Sustainability.
+      </p>
+
+      <figure aria-label="Six minimalist pillars illustration">
+        <svg viewBox="0 0 600 240" role="img" aria-labelledby="pillarsTitle" width="100%" height="auto">
+          <title id="pillarsTitle">Six Pillars Illustration</title>
+          <!-- base -->
+          <rect x="20" y="210" width="560" height="12" rx="4" fill="#d1d5db"/>
+          <!-- caps + shafts (6 pillars) -->
+          <!-- Pillar 1 -->
+          <rect x="40"  y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="55"  y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+          <!-- Pillar 2 -->
+          <rect x="140" y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="155" y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+          <!-- Pillar 3 -->
+          <rect x="240" y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="255" y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+          <!-- Pillar 4 -->
+          <rect x="340" y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="355" y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+          <!-- Pillar 5 -->
+          <rect x="440" y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="455" y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+          <!-- Pillar 6 -->
+          <rect x="540" y="50"  width="60" height="10" rx="4" fill="#9ca3af"/>
+          <rect x="555" y="60"  width="30" height="150" rx="6" fill="#6b7280"/>
+        </svg>
+        <figcaption class="muted">
+          Operational Excellence • Security • Reliability • Performance • Cost • Sustainability
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- About block -->
+    <section aria-labelledby="about-project" class="section">
+      <h2 id="about-project">About this Project</h2>
+      <p>
+        A fully automated, secure static site on AWS — <strong>S3 (private) + CloudFront (OAC)</strong> with
+        <strong>WAFv2</strong>, strict <strong>security headers</strong> (CSP/HSTS/COOP/COEP/Permissions-Policy),
+        and CI/CD via <strong>GitHub Actions (OIDC)</strong>. Infrastructure is defined in <strong>Terraform</strong>,
+        including budgets, lifecycle policies, and teardown-safe settings.
+      </p>
+      <ul>
+        <li>Security: OAC, HTTPS-only, managed WAF rules, strict headers</li>
+        <li>Ops: Terraform state locking, CI scans (fmt/validate, TFLint, Checkov)</li>
+        <li>Perf/Cost: cache policies for HTML vs assets, compression, PriceClass 100</li>
+      </ul>
     </section>
 
     <footer class="footer">
       © <span id="y"></span> Gregory John Carberry · gjcarberry.uk
     </footer>
   </div>
-
-  
 </body>
 </html>

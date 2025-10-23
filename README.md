@@ -69,6 +69,21 @@ For details, see [architecture_diagram_static_site.md](./docs/architecture_diagr
 - **IAM least-privilege role** for GitHub OIDC deployments
 - **Server-side encryption (AES-256)** on all S3 buckets
 
+### 🛡️ Additional Security Enhancements
+
+- **Modern Response Headers Policy** — Adds robust browser-level protection:
+  - `Content-Security-Policy` (strict, no inline scripts or styles)
+  - `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`
+  - Cross-origin isolation headers (`COOP`, `COEP`, `CORP`)  
+  - `Permissions-Policy` restricting camera, mic, and geolocation access
+- **Public Disclosure Metadata** — Implements standard `.well-known` endpoints:
+  - `robots.txt` for crawler guidance  
+  - `.well-known/security.txt` for responsible vulnerability disclosure (RFC 9116)
+- **Infrastructure Hardening** — Buckets use `force_destroy = true` for safe teardown of versioned data, and lifecycle rules to expire non-current versions.
+
+> Together these measures align the static site with modern web-security benchmarks such as Mozilla Observatory A+ and AWS Well-Architected Security Pillar guidance.
+
+
 ### ⚙️ Reliability
 - **Infrastructure-as-Code** (Terraform)
 - **State locking** via DynamoDB
