@@ -1,17 +1,44 @@
-# Terraform
-**/.terraform/
-**/*.tfstate
-**/*.tfstate.*
-crash.log
-crash.*.log
-*.tfvars
-*.tfvars.json
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-.terraformrc
-terraform.rc
+# ---- General ----
+.DS_Store
+Thumbs.db
+*.log
+
+# ---- Node / Frontend (if ever added) ----
+node_modules/
+dist/
+build/
+
+# ---- Python (if ever used for tooling) ----
+__pycache__/
+*.pyc
+
+# ---- Terraform ----
+terraform/.terraform/
+terraform/.terraform.*
+terraform/.terraform.lock.hcl
+
+# State files (do NOT commit)
+terraform/*.tfstate
+terraform/*.tfstate.*
+
+# Plans & crash files
+terraform/tfplan
+terraform/plan.txt
+terraform/crash.log
+terraform/*.crash
+
+# Local variable files (keep examples only)
+terraform/*.tfvars
+!terraform/terraform.auto.tfvars.example
+
+# ---- VS Code ----
+.vscode/
+.history/
+
+# ---- OS / Editor ----
+*~
+*.swp
+*.swo
 
 # AWS local creds (just in case)
 .aws/
