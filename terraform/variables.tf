@@ -60,3 +60,15 @@ variable "budget_email" {
   type        = list(string)
   default     = ["Carberry.GJ@gmail.com"] # change/add as you like
 }
+
+variable "budget_limit" {
+  description = "Monthly cost budget amount (GBP)."
+  type        = number
+  default     = 5
+}
+
+variable "price_class" {
+  description = "CloudFront price class."
+  type        = string
+  default     = "PriceClass_100"
+}

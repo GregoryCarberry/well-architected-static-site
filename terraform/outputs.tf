@@ -1,55 +1,70 @@
+# --- S3 ---
 output "bucket_name" {
-  value = aws_s3_bucket.site.bucket
-}
-
-output "cloudfront_domain_name" {
-  value = aws_cloudfront_distribution.this.domain_name
-}
-
-output "cloudfront_distribution_id" {
-  value = aws_cloudfront_distribution.this.id
-}
-
-output "deploy_role_arn" {
-  value       = aws_iam_role.gh_actions_deploy.arn
-  description = "IAM role ARN GitHub Actions should assume."
-}
-
-# WAF and logging visibility outputs
-output "waf_web_acl_arn" {
-  description = "ARN of the WAF Web ACL protecting the CloudFront distribution"
-  value       = aws_cloudfront_distribution.this.web_acl_id
+  value       = module.s3_site.site_bucket_name
+  description = "Primary site bucket name"
 }
 
 output "logging_bucket_name" {
-  description = "Name of the S3 bucket storing CloudFront logs"
-  value       = aws_s3_bucket.logs.bucket
+  value       = module.s3_site.logs_bucket_name
+  description = "Logs bucket name"
 }
 
-# IAM / CI visibility for GitHub OIDC
-output "github_oidc_provider_arn" {
-  description = "ARN of the GitHub OIDC provider used for CI/CD"
-  value       = aws_iam_openid_connect_provider.github.arn
+# --- CloudFront ---
+output "cloudfront_domain_name" {
+  value       = module.cloudfront.distribution_domain_name
+  description = "CloudFront distribution domain"
 }
 
-output "github_deploy_role_name" {
-  description = "Name of the IAM role assumed by GitHub Actions"
-  value       = "${var.project_name}-gh-deploy"
+output "cloudfront_distribution_id" {
+  value       = module.cloudfront.distribution_id
+  description = "CloudFront distribution ID"
 }
 
-# DNS + ACM context for custom domains
-output "domain_name" {
-  description = "Primary domain name for the site"
-  value       = var.domain_name
-}
-
-output "acm_certificate_arn" {
-  description = "ARN of the ACM certificate in us-east-1"
-  value       = aws_acm_certificate.cf[0].arn
-}
-
-# Full CloudFront URL for easy access
 output "cloudfront_url" {
-  description = "Full HTTPS URL to the CloudFront distribution"
-  value       = "https://${aws_cloudfront_distribution.this.domain_name}"
+  value       = "https://${module.cloudfront.distribution_domain_name}"
+  description = "Convenience URL to the dist"
+}
+
+# --- WAF ---
+output "waf_web_acl_arn" {
+  value       = module.waf.waf_arn
+  description = "WAFv2 Web ACL ARN (CloudFront scope)"
+}
+
+# --- ACM ---
+output "acm_certificate_arn" {
+  value       = module.cert.acm_certificate_arn
+  description = "ACM cert ARN (us-east-1)"
+}
+
+# --- GitHub CI ---
+output "deploy_role_arn" {
+  value       = module.ci_github.deploy_role_arn
+  description = "OIDC deploy role for GitHub Actions"
+}
+
+output "github_oidc_provider_arn" {
+  value       = module.ci_github.oidc_provider_arn
+  description = "GitHub OIDC provider ARN"
+}
+
+output "oidc_provider_arn" {
+  value       = module.ci_github.oidc_provider_arn
+  description = "GitHub OIDC provider ARN"
+}
+
+# --- WAF Logs Bucket (us-east-1) ---
+output "waf_logs_bucket_arn" {
+  value       = module.waf.waf_logs_bucket_arn
+  description = "ARN of the dedicated us-east-1 bucket for WAF logs"
+}
+
+output "waf_logs_bucket_name" {
+  value       = module.waf.waf_logs_bucket_name
+  description = "WAF logs S3 bucket name (us-east-1)."
+}
+
+output "waf_firehose_arn" {
+  value       = module.waf.waf_firehose_arn
+  description = "WAF logs Firehose ARN (us-east-1)."
 }
