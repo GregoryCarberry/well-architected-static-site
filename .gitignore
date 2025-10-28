@@ -44,3 +44,8 @@ terraform/*.tfvars
 .aws/
 *.pem
 *.key
+
+# Root-level Terraform artifacts
+/tfplan
+/plan.txt
+/.terraform.lock.hcl.bak*
