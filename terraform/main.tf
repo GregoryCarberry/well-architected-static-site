@@ -2,6 +2,15 @@
 # Root wiring — composes modules (keep resources in modules/)
 # ------------------------------------------------------------
 
+# Random suffix for globally unique bucket names
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
+locals {
+  project_name_suffixed = "${var.project_name}-${substr(random_id.suffix.hex, 0, 4)}"
+}
+
 data "aws_caller_identity" "current" {}
 
 # Route 53 zone for your domain (adjust if you use a different lookup)
@@ -12,7 +21,7 @@ data "aws_route53_zone" "this" {
 # --- S3: site + logs
 module "s3_site" {
   source       = "./modules/s3-site"
-  project_name = var.project_name
+  project_name = local.project_name_suffixed
   account_id   = data.aws_caller_identity.current.account_id
   region       = var.region
   tags         = local.common_tags
