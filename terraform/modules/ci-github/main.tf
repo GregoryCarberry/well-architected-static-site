@@ -46,19 +46,21 @@ data "aws_iam_policy_document" "gh_oidc_trust" {
 
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
-    # OIDC token audience must be for AWS STS
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
 
-    # Restrict to main branch of this specific repository (case-sensitive)
+    # Accept main branch, any branch, tags, and PRs
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.repo_full_name}:ref:refs/heads/main"
+        "repo:GregoryCarberry/well-architected-static-site:ref:refs/heads/main",
+        "repo:GregoryCarberry/well-architected-static-site:ref:refs/heads/*",
+        "repo:GregoryCarberry/well-architected-static-site:ref:refs/tags/*",
+        "repo:GregoryCarberry/well-architected-static-site:pull_request"
       ]
     }
   }

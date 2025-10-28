@@ -1,4 +1,5 @@
 name: deploy
+
 on:
   push:
     branches: [ "main" ]
@@ -6,46 +7,50 @@ on:
       - "site/**"
       - "terraform/**"
       - ".github/workflows/deploy.yml"
-  workflow_dispatch: {} # manual trigger
+  workflow_dispatch: {}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    # Needed for OIDC + checkout
     permissions:
       id-token: write
       contents: read
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Configure AWS
+    env:
+      AWS_REGION: eu-west-1
+      ROLE_ARN: arn:aws:iam::412717960006:role/wa-static-site-gh-deploy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # audience is optional and defaults to sts.amazonaws.com
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_wrapper: false
 
-
-            # REMOVE the old "Setup Terraform" + "Get outputs" steps
-
-      - name: Resolve bucket & distribution without Terraform
-        id: res
+      - name: Init Terraform (read outputs only)
+        working-directory: terraform
         run: |
-          PROJECT_NAME="wa-static-site"     # must match var.project_name
-          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-          BUCKET="${PROJECT_NAME}-site-${ACCOUNT}"
+          terraform init -input=false -upgrade
 
-          # Find the CloudFront distribution by the comment we set in Terraform
-          DISTID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='${PROJECT_NAME} distribution'].Id | [0]" \
-            --output text)
-
-          echo "bucket=$BUCKET"   >> $GITHUB_OUTPUT
-          echo "distid=$DISTID"   >> $GITHUB_OUTPUT
-
+      - name: Read outputs from remote state
+        id: res
+        shell: bash
+        run: |
+          BUCKET="$(terraform -chdir=terraform output -raw bucket_name)"
+          DISTID="$(terraform -chdir=terraform output -raw cloudfront_distribution_id || true)"
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "distid=$DISTID" >> "$GITHUB_OUTPUT"
 
       - name: Sync site to S3
         run: |
@@ -57,6 +62,3 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.res.outputs.distid }}" \
             --paths "/*"
-
-
-      
