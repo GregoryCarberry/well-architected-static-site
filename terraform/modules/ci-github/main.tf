@@ -52,7 +52,7 @@ data "aws_iam_policy_document" "gh_oidc_trust" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Accept main branch, any branch, tags, and PRs
+    # Allow main branch, tags, PRs, and workflow_dispatch/environment runs
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -60,7 +60,8 @@ data "aws_iam_policy_document" "gh_oidc_trust" {
         "repo:GregoryCarberry/well-architected-static-site:ref:refs/heads/main",
         "repo:GregoryCarberry/well-architected-static-site:ref:refs/heads/*",
         "repo:GregoryCarberry/well-architected-static-site:ref:refs/tags/*",
-        "repo:GregoryCarberry/well-architected-static-site:pull_request"
+        "repo:GregoryCarberry/well-architected-static-site:pull_request",
+        "repo:GregoryCarberry/well-architected-static-site:environment:*"
       ]
     }
   }
