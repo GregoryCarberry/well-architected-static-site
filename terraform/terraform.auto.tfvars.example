@@ -1,0 +1,13 @@
+# Copy this file to terraform.auto.tfvars and edit values as needed.
+
+# The public domain you control in Route 53
+domain_name = "gjcarberry.uk"
+
+# If false, the stack still deploys CloudFront + S3, using the CloudFront URL only
+enable_custom_domain = true
+
+# Email(s) for cost alerts
+budget_email = ["Carberry.GJ@gmail.com"]
+
+# Base project name. A short random hex suffix is appended automatically to ensure global bucket uniqueness.
+project_name = "wa-static-site"
